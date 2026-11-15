@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Desk</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;700&display=swap">
+<style>
+:root{--bg:#F1F4F2;--sf:#FFFFFF;--ink:#14211D;--mu:#5B6C66;--ac:#1C6B58;--aci:#FFFFFF;--wn:#B4491A;--ln:#D5DDD9;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0E1614;--sf:#16211E;--ink:#E5EEEA;--mu:#97A9A2;--ac:#5CC4A6;--aci:#07251D;--wn:#F0A265;--ln:#27382F;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0E1614;--sf:#16211E;--ink:#E5EEEA;--mu:#97A9A2;--ac:#5CC4A6;--aci:#07251D;--wn:#F0A265;--ln:#27382F;color-scheme:dark}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;height:100%;display:flex;flex-direction:column;background:var(--bg);color:var(--ink);font:16px/1.45 "Schibsted Grotesk",system-ui,sans-serif}
+[hidden]{display:none!important}
+header{display:flex;align-items:flex-end;justify-content:space-between;padding:14px 18px 6px}
+h1{margin:0;font-size:32px;line-height:1.1;letter-spacing:-.02em}
+h2{font-size:15px;font-weight:600;color:var(--mu);margin:18px 0 2px}
+main{flex:1;overflow-y:auto;padding:8px 18px 16px}
+nav{display:flex;border-top:1px solid var(--ln);background:var(--sf)}
+nav button{flex:1;padding:12px 0;border:0;border-top:3px solid transparent;background:none;color:var(--mu);font-family:inherit;font-size:14px;font-weight:600}
+nav button[aria-current="true"]{color:var(--ac);border-top-color:var(--ac)}
+input,textarea,button{font:inherit;color:inherit}
+input[type=text],input[type=datetime-local],textarea{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--ln);border-radius:10px;background:var(--sf)}
+input[type=checkbox]{width:22px;height:22px;accent-color:var(--ac);flex:none}
+.btn{background:var(--ac);color:var(--aci);border:0;border-radius:10px;padding:10px 16px;font-weight:600}
+.lk{border:0;background:none;color:var(--ac);font-weight:600;padding:6px 0}
+.x{border:0;background:none;color:var(--mu);font-size:22px;line-height:1;padding:4px 8px}
+.mu{color:var(--mu);font-size:13px}
+.od{color:var(--wn)}
+.add{display:grid;gap:8px;margin-bottom:10px}
+.row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--ln)}
+.t{flex:1;min-width:0;overflow-wrap:anywhere}
+.msg{max-width:88%;padding:10px 13px;margin:8px 0;border-radius:16px;white-space:pre-wrap;overflow-wrap:anywhere}
+.u{margin-left:auto;background:var(--ac);color:var(--aci);border-bottom-right-radius:4px}
+.a{background:var(--sf);border:1px solid var(--ln);border-bottom-left-radius:4px}
+.chip{border:1px solid var(--ln);background:var(--sf);border-radius:999px;padding:8px 14px;margin:6px 6px 0 0;text-align:left}
+#c{display:flex;gap:8px;align-items:flex-end;padding:8px 18px 12px}
+#c textarea{flex:1;resize:none;max-height:120px}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header><div><h1>Ask</h1><div class="mu" id="dt"></div></div><button class="lk" id="nc" type="button">New chat</button></header>
+<main id="view"></main>
+<form id="c"><textarea id="in" rows="1" placeholder="Message your assistant" aria-label="Message"></textarea><button class="btn">Send</button></form>
+<nav><button data-tab="chat">Ask</button><button data-tab="tasks">Tasks</button><button data-tab="notes">Notes</button><button data-tab="agenda">Agenda</button></nav>
+<script>
+const $=s=>document.querySelector(s),pad=n=>String(n).padStart(2,"0");
+const P=s=>new Date(s.length<=10?s+"T00:00":s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const iso=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes());
+const dfmt=(d,o)=>d.toLocaleDateString(undefined,o),tfmt=d=>d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+const nd=s=>{s=String(s||"").trim();if(!s||isNaN(P(s.slice(0,16))))return"";return s.length>10?s.slice(0,16):s.slice(0,10)};
+const when=s=>{const d=P(s);return dfmt(d,{weekday:"short",month:"short",day:"numeric"})+(s.length>10?", "+tfmt(d):"")};
+const isLate=at=>P(at)<(at.length>10?new Date():new Date(new Date().setHours(0,0,0,0)));
+const id8=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+let S={todos:[],notes:[],events:[],chat:[]},tab="chat",store=null,tm=0,busy=false;
+const TABS={chat:"Ask",tasks:"Tasks",notes:"Notes",agenda:"Agenda"};
+try{const j=localStorage.getItem("desk");if(j)S=Object.assign(S,JSON.parse(j))}catch(e){}
+function save(){clearTimeout(tm);tm=setTimeout(async()=>{try{if(store)await store.set(S);else localStorage.setItem("desk",JSON.stringify(S))}catch(e){}},400)}
+const addTodo=(text,due)=>{const t={id:id8(),text:String(text).trim(),due:nd(due),done:false};S.todos.push(t);save();return t};
+const addNote=text=>{const n={id:id8(),text:String(text).trim(),ts:iso(new Date())};S.notes.push(n);save();return n};
+const addEvent=(title,start)=>{const e={id:id8(),title:String(title).trim(),start:nd(start)};if(!e.start)return null;S.events.push(e);save();return e};
+
+const CH=["Remind me to renew my passport by Friday","What’s on my agenda this week?","Remember that I prefer window seats","Explain how compound interest works"];
+function drawChat(){
+  if(tab!=="chat")return;const m=$("#view");
+  m.innerHTML=S.chat.length?S.chat.map(x=>`<div class="msg ${x.role==="user"?"u":"a"}">${esc(x.content||"Thinking…")}</div>`).join(""):`<p class="mu">Ask a question, or tell me what to add to your tasks, notes or agenda.</p>`+CH.map(c=>`<button class="chip" data-fill="${esc(c)}">${esc(c)}</button>`).join("");
+  m.scrollTop=m.scrollHeight;
+}
+function viewTasks(){
+  const open=S.todos.filter(t=>!t.done).sort((a,b)=>(a.due||"9")<(b.due||"9")?-1:1),done=S.todos.filter(t=>t.done);
+  const row=t=>`<div class="row"><input type="checkbox" data-done="${t.id}" ${t.done?"checked":""} aria-label="Done"><div class="t${t.done?" mu":""}">${esc(t.text)}${t.due?`<div class="mu${!t.done&&isLate(t.due)?" od":""}">${when(t.due)}</div>`:""}</div><button class="x" data-del="todos:${t.id}" aria-label="Delete task">×</button></div>`;
+  return `<form class="add" data-add="todo"><input type="text" name="text" placeholder="New task" required><input type="datetime-local" name="due" aria-label="Due"><button class="btn">Add task</button></form>`+(open.map(row).join("")||`<p class="mu">Nothing to do. Add a task above or ask the assistant.</p>`)+(done.length?`<h2>Done</h2>`+done.map(row).join(""):"");
+}
+function viewNotes(){
+  return `<form class="add" data-add="note"><textarea name="text" rows="3" placeholder="Write a note or something to remember" required></textarea><button class="btn">Save note</button></form>`+(S.notes.slice().reverse().map(n=>`<div class="row"><div class="t" style="white-space:pre-wrap">${esc(n.text)}<div class="mu">${when(n.ts)}</div></div><button class="x" data-del="notes:${n.id}" aria-label="Delete note">×</button></div>`).join("")||`<p class="mu">No notes yet. The assistant can read what you save here.</p>`);
+}
+function viewAgenda(){
+  const now=new Date(),t0=iso(now).slice(0,10);
+  const it=[...S.events.filter(e=>e.start.slice(0,10)>=t0).map(e=>({k:e.id,text:e.title,at:e.start,ev:1})),...S.todos.filter(t=>t.due&&!t.done).map(t=>({k:t.id,text:t.text,at:t.due}))].sort((a,b)=>a.at<b.at?-1:a.at>b.at?1:0);
+  const late=it.filter(i=>!i.ev&&isLate(i.at)),g=[];
+  if(late.length)g.push(["Overdue",late]);
+  it.filter(i=>!late.includes(i)).forEach(i=>{const d=P(i.at),l=d.toDateString()===now.toDateString()?"Today":dfmt(d,{weekday:"long",month:"short",day:"numeric"});let x=g.find(y=>y[0]===l);if(!x)g.push(x=[l,[]]);x[1].push(i)});
+  const row=i=>{const tm=i.at.length>10?tfmt(P(i.at)):"All day";return `<div class="row"><div class="t">${esc(i.text)}<div class="mu">${i.ev?tm:"Task, "+tm}</div></div>${i.ev?`<button class="x" data-del="events:${i.k}" aria-label="Delete event">×</button>`:""}</div>`};
+  return `<form class="add" data-add="event"><input type="text" name="title" placeholder="New event" required><input type="datetime-local" name="start" aria-label="Starts" required><button class="btn">Add event</button></form>`+(g.map(([l,a])=>`<h2>${l}</h2>`+a.map(row).join("")).join("")||`<p class="mu">Nothing scheduled. Add an event, or give a task a due time.</p>`);
+}
+function render(){
+  $("h1").textContent=TABS[tab];$("#dt").textContent=dfmt(new Date(),{weekday:"long",month:"long",day:"numeric"});
+  $("#nc").hidden=$("#c").hidden=tab!=="chat";
+  document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-current",String(b.dataset.tab===tab)));
+  if(tab==="chat")drawChat();else $("#view").innerHTML={tasks:viewTasks,notes:viewNotes,agenda:viewAgenda}[tab]();
+}
+
+const SYS=()=>`You are a brief, friendly personal assistant inside a phone app. Now: ${dfmt(new Date(),{weekday:"long",year:"numeric",month:"long",day:"numeric"})}, ${tfmt(new Date())} (local time). Answer questions and explain topics from your own knowledge; you have no live web access, so say so when freshness matters. Use the tools to add tasks, notes and events, mark tasks done, or read the user’s saved data. Pass times as local YYYY-MM-DDTHH:MM. After using a tool, confirm in one short line. Reply in plain text without markdown.`;
+const obj=(p,r)=>({type:"object",properties:p,required:r||[]});
+const TOOLS=[
+  {name:"add_todo",description:"Add a task, optionally with a due date or time.",inputSchema:obj({text:{type:"string"},due:{type:"string",description:"Local YYYY-MM-DDTHH:MM or YYYY-MM-DD"}},["text"]),execute:i=>({ok:true,id:addTodo(i.text,i.due).id})},
+  {name:"complete_todo",description:"Mark a task done by its id.",inputSchema:obj({id:{type:"string"}},["id"]),execute:i=>{const t=S.todos.find(x=>x.id===i.id);if(!t)return{ok:false};t.done=true;save();return{ok:true}}},
+  {name:"add_note",description:"Save a note or something to remember.",inputSchema:obj({text:{type:"string"}},["text"]),execute:i=>({ok:true,id:addNote(i.text).id})},
+  {name:"add_event",description:"Add a calendar event.",inputSchema:obj({title:{type:"string"},start:{type:"string",description:"Local YYYY-MM-DDTHH:MM or YYYY-MM-DD"}},["title","start"]),execute:i=>{const e=addEvent(i.title,i.start);return e?{ok:true,id:e.id}:{ok:false,error:"invalid start"}}},
+  {name:"get_data",description:"Read the user’s open tasks, recent notes and upcoming events.",inputSchema:obj({}),execute:()=>({tasks:S.todos.filter(t=>!t.done),notes:S.notes.slice(-15),events:S.events.filter(e=>e.start.slice(0,10)>=iso(new Date()).slice(0,10))})}
+];
+
+async function send(txt){
+  txt=txt.trim();if(busy||!txt)return;busy=true;
+  S.chat.push({role:"user",content:txt},{role:"assistant",content:""});
+  const a=S.chat[S.chat.length-1];$("#in").value="";$("#in").style.height="auto";drawChat();
+  try{
+    const sm=await claude.use("sample");
+    if(!sm)throw{code:"none"};
+    let h=S.chat.slice(-13,-1).map(x=>({role:x.role,content:x.content}));
+    while(h.length&&h[0].role!=="user")h.shift();
+    h[0]={role:"user",content:SYS()+"\n\n"+h[0].content};
+    const r=await sm(h,{tools:TOOLS,cache:false,onText:u=>{a.content=u.text;drawChat()}});
+    a.content=r.text||a.content||"Done.";
+  }catch(e){
+    a.content=e.code==="not_granted"?"Access was declined. Allow it in this page’s Permissions menu to chat.":e.code==="rate_limited"?"Too many requests. Wait a moment, then try again.":e.code==="none"?"Chat isn’t available in this view. Open the page from your Claude account.":"Something went wrong: "+(e.message||"unknown error");
+  }
+  S.chat=S.chat.slice(-40);busy=false;save();drawChat();
+}
+
+$("#c").addEventListener("submit",e=>{e.preventDefault();send($("#in").value)});
+$("#in").addEventListener("input",e=>{const t=e.target;t.style.height="auto";t.style.height=Math.min(t.scrollHeight,120)+"px"});
+$("#nc").onclick=()=>{if(busy)return;S.chat=[];save();render()};
+$("nav").addEventListener("click",e=>{const b=e.target.closest("[data-tab]");if(b){tab=b.dataset.tab;render()}});
+const V=$("#view");
+V.addEventListener("submit",e=>{
+  e.preventDefault();const f=e.target,v=Object.fromEntries(new FormData(f)),k=f.dataset.add;
+  if(k==="todo")addTodo(v.text,v.due);else if(k==="note")addNote(v.text);else if(k==="event")addEvent(v.title,v.start);
+  render();
+});
+V.addEventListener("change",e=>{const id=e.target.dataset.done;if(!id)return;const t=S.todos.find(x=>x.id===id);if(t){t.done=e.target.checked;save();render()}});
+V.addEventListener("click",e=>{
+  const d=e.target.closest("[data-del]");
+  if(d){const[k,id]=d.dataset.del.split(":");S[k]=S[k].filter(x=>x.id!==id);save();render();return}
+  const c=e.target.closest("[data-fill]");if(c){$("#in").value=c.dataset.fill;$("#in").focus()}
+});
+render();
+(async()=>{
+  try{
+    const[u,db]=await Promise.all([claude.use("user"),claude.use("db")]);
+    const id=u&&await u.id();
+    if(db&&id){
+      const r=db.collection("data/users/"+id).doc("state"),s=await r.get();store=r;
+      if(s.exists&&!busy){S=Object.assign({todos:[],notes:[],events:[],chat:[]},s.data());render()}else save();
+    }
+  }catch(e){}
+})();
+</script>
+</body>
+</html>
